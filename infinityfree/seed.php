@@ -1,7 +1,7 @@
 ﻿<?php
 // OnlineMark Database Seed - with better error handling
 try {
-    $DB_HOST = "localhost";
+    $DB_HOST = "sql306.infinityfree.com";
     $DB_USER = "if0_39743066";
     $DB_PASS = "DouglasJP2026";
     $DB_NAME = "if0_39743066_onlinemark";

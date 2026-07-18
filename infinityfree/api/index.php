@@ -9,7 +9,7 @@ header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
 header("Access-Control-Allow-Headers: Content-Type, Authorization");
 if ($_SERVER["REQUEST_METHOD"] === "OPTIONS") { http_response_code(200); exit; }
 
-$DB_HOST = getenv("DB_HOST") ?: "localhost";
+$DB_HOST = getenv("DB_HOST") ?: "sql306.infinityfree.com";
 $DB_USER = getenv("DB_USER") ?: "if0_39743066";
 $DB_PASS = getenv("DB_PASSWORD") ?: "DouglasJP2026";
 $DB_NAME = getenv("DB_NAME") ?: "if0_39743066_onlinemark";

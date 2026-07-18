@@ -5,7 +5,7 @@ echo "=== 数据库连接诊断 ===\n\n";
 $user = "if0_39743066";
 $pass = "DouglasJP2026";
 $name = "if0_39743066_onlinemark";
-$hosts = ["localhost", "127.0.0.1", "sql306.infinityfree.com"];
+$hosts = ["sql306.infinityfree.com", "localhost", "127.0.0.1"];
 
 echo "DNS解析:\n";
 foreach ($hosts as $h) {
@@ -14,6 +14,7 @@ foreach ($hosts as $h) {
 }
 
 echo "\n连接测试:\n";
+mysqli_report(MYSQLI_REPORT_OFF);
 foreach ($hosts as $h) {
     echo "  尝试 $h ... ";
     $start = microtime(true);
