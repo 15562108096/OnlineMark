@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Layout, Menu, Button, Dropdown, Avatar, Space } from "antd";
 import {
@@ -59,7 +59,7 @@ const AppLayout: React.FC = () => {
           }}
           onClick={() => navigate("/")}
         >
-          <span style={{ fontSize: 20, fontWeight: 700, color: "#1677ff" }}>云教学</span>
+          <span style={{ fontSize: 20, fontWeight: 700, color: "#1677ff" }}>加斯顿之洞</span>
         </div>
         <Menu
           mode="inline"
@@ -125,7 +125,7 @@ const AppLayout: React.FC = () => {
             background: "#f0f2f5",
           }}
         >
-          云教学服务平台 &copy; {new Date().getFullYear()} - 让教学更智能
+          &copy; 2025 加斯顿之洞 版权所有
         </Footer>
       </Layout>
     </Layout>

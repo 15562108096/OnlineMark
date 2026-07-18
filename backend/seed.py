@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """初始化数据库 - 创建超级管理员账号"""
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

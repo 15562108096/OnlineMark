@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Button, Card, Input, Select, Form, message, Space, Tag, Modal, Tooltip,
@@ -17,7 +17,7 @@ interface Rect {
   x: number; y: number; w: number; h: number;
 }
 
-type ToolMode = "marker" | "zone" | "question" | "view";
+type ToolMode = "marker" | "zone" | "question" | "view" | "answer_mark";
 
 const zoneColors: Record<string, string> = {
   student_info: "#0099ff",
@@ -48,6 +48,8 @@ const TemplateEditorPage: React.FC = () => {
   const [imageSize, setImageSize] = useState({ w: 0, h: 0 });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Annotation data
   const [markers, setMarkers] = useState<Marker[]>([]);
@@ -60,10 +62,11 @@ const TemplateEditorPage: React.FC = () => {
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [currentRect, setCurrentRect] = useState<Rect | null>(null);
   const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [dragging, setDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  
+  
+  
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
+  const [answerMode, setAnswerMode] = useState<string>("input");
   const [selectedMarker, setSelectedMarker] = useState<number | null>(null);
 
   // Zone/Question modals
@@ -132,7 +135,6 @@ const TemplateEditorPage: React.FC = () => {
     setScale(s);
     canvas.width = imgW * s;
     canvas.height = imgH * s;
-    setOffset({ x: 0, y: 0 });
   };
 
   const getCanvasCoords = (clientX: number, clientY: number) => {
@@ -154,11 +156,40 @@ const TemplateEditorPage: React.FC = () => {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (imgRef.current.complete && imgRef.current.naturalWidth > 0) {
-      ctx.drawImage(imgRef.current, offset.x * scale, offset.y * scale, canvas.width, canvas.height);
+      ctx.drawImage(imgRef.current, 0, 0, canvas.width, canvas.height);
     }
 
     ctx.save();
     ctx.scale(scale, scale);
+
+    // Draw answer positions (for objective questions with answer_positions)
+    const allAnswerPositions = questions.filter(q => q.answer_positions).flatMap(q => q.answer_positions || []);
+    questions.forEach((q) => {
+      if (q.answer_positions) {
+        q.answer_positions.forEach((pos, idx) => {
+          const color = pos.is_correct ? "#52c41a" : "#722ed1";
+          ctx.fillStyle = pos.is_correct ? "rgba(82, 196, 26, 0.6)" : "rgba(114, 46, 209, 0.4)";
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2 / scale;
+          ctx.beginPath();
+          ctx.arc(pos.x, pos.y, 8 / scale, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = "#fff";
+          ctx.font = `bold ${9 / scale}px sans-serif`;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(pos.option, pos.x, pos.y);
+          if (pos.is_correct) {
+            ctx.strokeStyle = "#52c41a";
+            ctx.lineWidth = 3 / scale;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, 12 / scale, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+        });
+      }
+    });
 
     // Draw markers
     markers.forEach((m) => {
@@ -220,16 +251,64 @@ const TemplateEditorPage: React.FC = () => {
     }
 
     ctx.restore();
-  }, [markers, zones, questions, currentRect, isDrawing, scale, offset]);
+  }, [markers, zones, questions, currentRect, isDrawing, scale]);
 
   useEffect(() => { drawCanvas(); }, [drawCanvas]);
 
   // Mouse events
   const handleMouseDown = (e: React.MouseEvent) => {
     const coords = getCanvasCoords(e.clientX, e.clientY);
+    if (mode === "answer_mark") {
+      const objZones = zones.filter(z => z.zone_type === "objective");
+      for (const z of objZones) {
+        if (coords.x >= z.x && coords.x <= z.x + z.width && coords.y >= z.y && coords.y <= z.y + z.height) {
+          for (const q of questions) {
+            if (q.answer_positions) {
+              for (let i = 0; i < q.answer_positions.length; i++) {
+                const p = q.answer_positions[i];
+                if (Math.sqrt((coords.x-p.x)**2 + (coords.y-p.y)**2) < 15) {
+                  const npos = [...q.answer_positions];
+                  const was = npos[i].is_correct;
+                  npos.forEach((pp,j) => { pp.is_correct = (j==i) ? !was : false; });
+                  setQuestions(questions.map(qq => qq.question_number==q.question_number
+                    ? {...qq, answer_positions: npos, correct_answer: !was ? p.option : ""} : qq));
+                  message.success(!was ? "标记第"+q.question_number+"题答案"+p.option : "取消标记");
+                  return;
+                }
+              }
+            }
+          }
+          let added = false;
+          for (const q of questions) {
+            if (q.answer_positions) {
+              for (const p of q.answer_positions) {
+                if (Math.abs(coords.x-p.x)<30 && Math.abs(coords.y-p.y)<30) {
+                  const opts = ["A","B","C","D","E","F","G","H"];
+                  const used = q.answer_positions.map(pp=>pp.option);
+                  const next = opts.find(o=>!used.includes(o)) || "A";
+                  const npos = [...q.answer_positions, {question_number: q.question_number, option: next, x: coords.x, y: coords.y, is_correct: false}];
+                  setQuestions(questions.map(qq => qq.question_number==q.question_number ? {...qq, answer_positions: npos} : qq));
+                  message.success("添加选项"+next); added = true; return;
+                }
+              }
+            }
+          }
+          if (added) return;
+          const qnum = questions.length+1;
+          setQuestions([...questions, {question_number: qnum, question_type:"single", options_count:4,
+            options:["A","B","C","D"], option_layout:"vertical", score:1.0,
+            x:coords.x-5, y:coords.y-5, width:10, height:10,
+            sort_order:questions.length, answer_positions:[{question_number:qnum, option:"A", x:coords.x, y:coords.y, is_correct:false}]} as any]);
+          message.success("新建第"+qnum+"题，可继续点击添加选项位置");
+          return;
+        }
+      }
+      message.warning("请在客观题区域内点击");
+      return;
+    }
     if (mode === "marker") {
-      if (markers.length >= 4) { message.warning("最多4个定位点"); return; }
-      const newMarker: Marker = { point_index: markers.length, x: coords.x, y: coords.y, label: `P${markers.length + 1}` };
+      if (markers.length >= 20) { message.warning("定位点最多20个"); return; }
+      const newMarker: Marker = { point_index: markers.length, x: coords.x, y: coords.y, label: `P${markers.length + 1}`, page_number: currentPage };
       setMarkers([...markers, newMarker]);
     } else {
       setIsDrawing(true);
@@ -239,13 +318,6 @@ const TemplateEditorPage: React.FC = () => {
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (dragging) {
-      const dx = (e.clientX - dragStart.x) / scale;
-      const dy = (e.clientY - dragStart.y) / scale;
-      setOffset({ x: offset.x + dx, y: offset.y + dy });
-      setDragStart({ x: e.clientX, y: e.clientY });
-      return;
-    }
     if (!isDrawing || !startPos || !currentRect) return;
     const coords = getCanvasCoords(e.clientX, e.clientY);
     setCurrentRect({
@@ -257,7 +329,6 @@ const TemplateEditorPage: React.FC = () => {
   };
 
   const handleMouseUp = () => {
-    setDragging(false);
     if (!isDrawing || !currentRect || currentRect.w < 5 || currentRect.h < 5) {
       setIsDrawing(false);
       setCurrentRect(null);
@@ -275,7 +346,7 @@ const TemplateEditorPage: React.FC = () => {
         y: rect.y,
         width: rect.w,
         height: rect.h,
-        sort_order: zones.length,
+        sort_order: zones.length, page_number: currentPage,
       });
       setZoneModalOpen(true);
     } else if (mode === "question") {
@@ -298,7 +369,9 @@ const TemplateEditorPage: React.FC = () => {
   };
 
   const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
+    if (e.cancelable) {
+      e.preventDefault();
+    }
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     setScale((s) => Math.max(0.2, Math.min(3, s * delta)));
   };
@@ -321,16 +394,18 @@ const TemplateEditorPage: React.FC = () => {
         name: templateName,
         subject, grade, exam_name: examName,
         info_method: infoMethod,
-        markers: markers.map((m) => ({ point_index: m.point_index, x: m.x, y: m.y, label: m.label })),
+        markers: markers.map((m) => ({ point_index: m.point_index, x: m.x, y: m.y, width: m.width || 0, height: m.height || 0, shape: m.shape || "circle", label: m.label })),
         zones: zones.map((z) => ({
           zone_type: z.zone_type, label: z.label || zoneLabels[z.zone_type],
           x: z.x, y: z.y, width: z.width, height: z.height, sort_order: z.sort_order || 0,
+          config: z.config,
         })),
         questions: questions.map((q) => ({
           question_number: q.question_number, question_type: q.question_type,
           options_count: q.options_count, options: q.options || ["A","B","C","D"].slice(0, q.options_count),
           option_layout: q.option_layout, score: q.score, correct_answer: q.correct_answer,
           x: q.x, y: q.y, width: q.width, height: q.height, sort_order: q.sort_order || 0,
+          answer_positions: q.answer_positions,
         })),
       };
 
@@ -372,6 +447,30 @@ const TemplateEditorPage: React.FC = () => {
         </Space>
       </Card>
 
+      {/* Page navigation */}
+      {totalPages > 1 && (
+        <Card style={{ borderRadius: 12, marginBottom: 16 }} bodyStyle={{ padding: "8px 16px" }}>
+          <Space>
+            <Button size="small" disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p-1))}>上一页</Button>
+            <span>第 {currentPage} / {totalPages} 页</span>
+            <Button size="small" disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))}>下一页</Button>
+          </Space>
+        </Card>
+      )}
+      {/* Page navigation */}
+      {totalPages > 1 && (
+        <Card style={{ borderRadius: 12, marginBottom: 16 }} bodyStyle={{ padding: "8px 16px" }}>
+          <Space>
+            <Button size="small" disabled={currentPage <= 1}
+              onClick={() => setCurrentPage(p => Math.max(1, p-1))}>上一页</Button>
+            <span>第 {currentPage} / {totalPages} 页</span>
+            <Button size="small" disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage(p => Math.min(totalPages, p+1))}>下一页</Button>
+          </Space>
+        </Card>
+      )}
       <div className="editor-container">
         <div className="editor-canvas-wrap" onWheel={handleWheel}>
           {!imageUrl && !imageFile && (
@@ -386,7 +485,7 @@ const TemplateEditorPage: React.FC = () => {
           {(imageUrl || imageFile) && (
             <canvas
               ref={canvasRef}
-              style={{ cursor: mode === "marker" ? "crosshair" : mode === "view" ? "grab" : "crosshair", maxWidth: "100%", maxHeight: "100%" }}
+              style={{ cursor: mode === "marker" ? "crosshair" : "crosshair", maxWidth: "100%", maxHeight: "100%" }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -410,9 +509,9 @@ const TemplateEditorPage: React.FC = () => {
                   </Upload>
                   <Divider style={{ margin: "8px 0" }} />
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                    <Tooltip title="点击图片标注4个角点">
+                    <Tooltip title="点击图片标注定位点">
                       <Button type={mode === "marker" ? "primary" : "default"} icon={<AimOutlined />} onClick={() => setMode("marker")}>
-                        定位点 {markers.length}/4
+                        定位点 {markers.length}
                       </Button>
                     </Tooltip>
                     <Tooltip title="拖拽框选区域">
@@ -425,12 +524,18 @@ const TemplateEditorPage: React.FC = () => {
                     onClick={() => setMode("question")}>
                     框选客观题
                   </Button>
+                  <Button type={mode === "answer_mark" ? "primary" : "default"} block icon={<AimOutlined />}
+                    onClick={() => setMode("answer_mark")}
+                    disabled={zones.filter(z => z.zone_type === "objective").length === 0}>
+                    标记答案位置
+                  </Button>
                   <Divider style={{ margin: "8px 0" }} />
 
                   <div>
-                    <div style={{ fontWeight: 600, marginBottom: 8 }}>定位点 ({markers.length}/4)</div>
-                    {markers.length === 0 && <p style={{ color: "#999", fontSize: 12 }}>点击图片标注4个角点</p>}
-                    {markers.map((m) => (
+                    <div style={{ fontWeight: 600, marginBottom: 8 }}>定位点 ({markers.length})</div>
+                    {markers.length === 0 && <p style={{ color: "#999", fontSize: 12 }}>点击图片标注定位点</p>}
+                    {/* Filtered by page */}
+                    {markers.filter(m => !m.page_number || m.page_number === currentPage).map((m) => (
                       <div key={m.point_index} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
                         <span className="zone-tag marker">P{m.point_index + 1}</span>
                         <span style={{ fontSize: 12, color: "#999" }}>({Math.round(m.x)}, {Math.round(m.y)})</span>
@@ -448,7 +553,7 @@ const TemplateEditorPage: React.FC = () => {
                       <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => setMode("zone")}>添加</Button>
                     </div>
                     {zones.length === 0 && <p style={{ color: "#999", fontSize: 12 }}>使用框选工具标注区域</p>}
-                    {zones.map((z, idx) => (
+                    {zones.filter(z => !z.page_number || z.page_number === currentPage).map((z, idx) => (
                       <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", alignItems: "center" }}>
                         <span className={`zone-tag ${z.zone_type}`}>{z.label || zoneLabels[z.zone_type]}</span>
                         <Space size={4}>
@@ -469,7 +574,7 @@ const TemplateEditorPage: React.FC = () => {
                       <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => setMode("question")}>添加</Button>
                     </div>
                     {questions.length === 0 && <p style={{ color: "#999", fontSize: 12 }}>框选或点击添加客观题</p>}
-                    {questions.map((q, idx) => (
+                    {questions.filter(q => !q.page_number || q.page_number === currentPage).map((q, idx) => (
                       <div key={idx} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", alignItems: "center" }}>
                         <Space>
                           <span className="zone-tag objective">Q{q.question_number}</span>
@@ -524,7 +629,7 @@ const TemplateEditorPage: React.FC = () => {
       {/* Zone Modal */}
       <Modal title="区域配置" open={zoneModalOpen} onOk={() => {
         if (editingZone) {
-          const exists = zones.some((z) => z === editingZone);
+          const exists = zones.some((z) => z.x === editingZone?.x && z.y === editingZone?.y);
           if (!exists) {
             setZones([...zones, editingZone as Zone]);
           } else {

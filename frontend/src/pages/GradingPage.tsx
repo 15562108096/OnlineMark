@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, Table, Button, Space, Tag, Modal, Select, message, InputNumber, Input, Divider, Progress, Tabs, List, Badge } from "antd";
 import { PlusOutlined, UserAddOutlined, CheckCircleOutlined, AuditOutlined } from "@ant-design/icons";
 import { gradingApi, userApi, scanApi } from "../services/api";

@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import os, uuid, json, shutil, asyncio
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
@@ -20,7 +20,7 @@ def create_batch(name: str = Form(...), template_id: str = Form(...),
     temp = db.query(Template).filter(Template.id == template_id).first()
     if not temp:
         raise HTTPException(status_code=404, detail="模板不存在")
-    batch = ScanBatch(name=name, template_id=template_id, exam_name=exam_name, created_by=current_user.id)
+    batch = ScanBatch(name=name, template_id=template_id, exam_name=exam_name, upload_order="sequential", created_by=current_user.id)
     db.add(batch)
     db.commit()
     db.refresh(batch)
@@ -42,7 +42,7 @@ async def upload_sheets(batch_id: str = Form(...), files: List[UploadFile] = Fil
         with open(filepath, "wb") as f:
             content = await file.read()
             f.write(content)
-        sheet = ScannedSheet(batch_id=batch_id, filename=file.filename, file_path=filepath)
+        sheet = ScannedSheet(batch_id=batch_id, filename=file.filename, file_path=filepath, page_number=1, side="front")
         db.add(sheet)
         sheets.append(sheet)
 

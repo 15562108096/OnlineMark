@@ -1,4 +1,4 @@
-﻿export interface User {
+export interface User {
   id: string;
   username: string;
   real_name?: string;
@@ -13,7 +13,11 @@ export interface Marker {
   point_index: number;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
+  shape?: string;
   label?: string;
+  page_number?: number;
 }
 
 export interface Zone {
@@ -25,6 +29,16 @@ export interface Zone {
   width: number;
   height: number;
   sort_order?: number;
+  answer_positions?: AnswerPosition[];
+}
+
+
+export interface AnswerPosition {
+  question_number: number;
+  option: string;
+  x: number;
+  y: number;
+  is_correct?: boolean;
 }
 
 export interface Question {
@@ -41,6 +55,7 @@ export interface Question {
   width?: number;
   height?: number;
   sort_order?: number;
+  answer_positions?: AnswerPosition[];
 }
 
 export interface Template {
@@ -51,6 +66,8 @@ export interface Template {
   grade?: string;
   exam_name?: string;
   image_path: string;
+  pdf_path?: string;
+  total_pages?: number;
   image_width?: number;
   image_height?: number;
   total_score: number;
@@ -74,6 +91,7 @@ export interface ScanBatch {
   processed: number;
   failed: number;
   status: string;
+  upload_order?: string;
   created_at?: string;
 }
 

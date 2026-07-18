@@ -204,6 +204,182 @@ try {
         jsonExit(["message" => "分配成功", "count" => $inserted]);
     }
 
+    // ─── AUTH PASSWORD ───────────────────────
+    if (preg_match("#^/auth/password$#", $uri) && $method === "PUT") {
+        $u = authUser($db); $input = jsonInput();
+        if (!password_verify($input["old_password"]??"", $u["password_hash"])) jsonExit(["detail"=>"原密码错误"],400);
+        $id=$db->real_escape_string($u["id"]); $hash=password_hash($input["new_password"]??"",PASSWORD_BCRYPT);
+        $db->query("UPDATE users SET password_hash='$hash' WHERE id='$id'"); jsonExit(["message"=>"密码修改成功"]);
+    }
+
+    // ─── USERS ─────────────────────────────────
+    if (preg_match("#^/users/?$#",$uri) && $method==="GET") {
+        $u=authUser($db); $rf=$_GET["role"]??""; $sql="SELECT * FROM users";
+        if($rf) $sql.=" WHERE role='".$db->real_escape_string($rf)."'";
+        $r=$db->query($sql); $list=[]; while($row=$r->fetch_assoc()) $list[]=userDict($row); jsonExit($list);
+    }
+    if (preg_match("#^/users/?$#",$uri) && $method==="POST") {
+        authUser($db); $input=jsonInput(); $u=$db->real_escape_string($input["username"]??"");
+        if($db->query("SELECT id FROM users WHERE username='$u'")->num_rows) jsonExit(["detail"=>"用户名已存在"],400);
+        $id=uuid(); $hash=password_hash($input["password"]??"123456",PASSWORD_BCRYPT);
+        $role=$db->real_escape_string($input["role"]??"student"); $rn=$db->real_escape_string($input["real_name"]??"");
+        $em=$db->real_escape_string($input["email"]??""); $ph=$db->real_escape_string($input["phone"]??"");
+        $db->query("INSERT INTO users VALUES('$id','$u','$hash','$rn','$role','$em','$ph',1,NOW(),NULL,NULL)");
+        jsonExit(["message"=>"创建成功"]);
+    }
+    if (preg_match("#^/users/teachers$#",$uri) && $method==="GET") {
+        authUser($db); $r=$db->query("SELECT * FROM users WHERE role='teacher' AND is_active=1");
+        $list=[]; while($row=$r->fetch_assoc()) $list[]=userDict($row); jsonExit($list);
+    }
+    if (preg_match("#^/users/([^/]+)/toggle-active$#",$uri,$m) && $method==="PUT") {
+        authUser($db); $uid=$db->real_escape_string($m[1]);
+        $r=$db->query("SELECT is_active FROM users WHERE id='$uid'"); $u=$r->fetch_assoc();
+        if(!$u) jsonExit(["detail"=>"用户不存在"],404); $nv=$u["is_active"]?0:1;
+        $db->query("UPDATE users SET is_active=$nv WHERE id='$uid'"); jsonExit(["message"=>"已更新","is_active"=>(bool)$nv]);
+    }
+    if (preg_match("#^/users/([^/]+)$#",$uri,$m) && $method==="DELETE") {
+        authUser($db); $uid=$db->real_escape_string($m[1]);
+        $db->query("DELETE FROM users WHERE id='$uid' AND role!='super_admin'"); jsonExit(["message"=>"删除成功"]);
+    }
+
+    // ─── SCAN BATCHES ─────────────────────────
+    if (preg_match("#^/scan/batch/?$#",$uri) && $method==="GET") {
+        authUser($db); $r=$db->query("SELECT * FROM scan_batches ORDER BY created_at DESC"); $list=[];
+        while($row=$r->fetch_assoc()){$bid=$row["id"];
+            $p=$db->query("SELECT COUNT(*)c FROM scanned_sheets WHERE batch_id='$bid' AND status='completed'")->fetch_assoc()["c"];
+            $f=$db->query("SELECT COUNT(*)c FROM scanned_sheets WHERE batch_id='$bid' AND status='failed'")->fetch_assoc()["c"];
+            $list[]=["id"=>$row["id"],"name"=>$row["name"],"template_id"=>$row["template_id"],"exam_name"=>$row["exam_name"],"total"=>intval($row["total_sheets"]),"processed"=>intval($p),"failed"=>intval($f),"status"=>$row["status"],"created_at"=>$row["created_at"]];
+        } jsonExit($list);
+    }
+    if (preg_match("#^/scan/batch/?$#",$uri) && $method==="POST") {
+        authUser($db); $input=jsonInput(); $id=uuid();
+        $n=$db->real_escape_string($input["name"]??""); $tid=$db->real_escape_string($input["template_id"]??""); $exam=$db->real_escape_string($input["exam_name"]??"");
+        $db->query("INSERT INTO scan_batches VALUES('$id','$n','$tid','$exam',0,0,'pending','',NOW(),NOW())");
+        jsonExit(["message"=>"创建成功","batch"=>["id"=>$id,"name"=>$n]]);
+    }
+    if (preg_match("#^/scan/batch/([^/]+)$#",$uri,$m) && $method==="GET") {
+        authUser($db); $bid=$db->real_escape_string($m[1]);
+        $r=$db->query("SELECT * FROM scan_batches WHERE id='$bid'"); $b=$r->fetch_assoc();
+        if(!$b) jsonExit(["detail"=>"批次不存在"],404);
+        $s=$db->query("SELECT id,filename,student_id,student_name,status,error_message FROM scanned_sheets WHERE batch_id='$bid'");
+        $sheets=[]; while($sh=$s->fetch_assoc()) $sheets[]=$sh;
+        jsonExit(["batch"=>["id"=>$b["id"],"name"=>$b["name"],"template_id"=>$b["template_id"],"exam_name"=>$b["exam_name"],"total"=>intval($b["total_sheets"]),"processed"=>intval($b["processed_sheets"]),"status"=>$b["status"],"created_at"=>$b["created_at"]],"sheets"=>$sheets]);
+    }
+
+    // ─── SCORES ───────────────────────────────
+    if (preg_match("#^/scores/calculate/([^/]+)$#",$uri,$m) && $method==="POST") {
+        authUser($db);$bid=$db->real_escape_string($m[1]);$r=[];
+        $sh=$db->query("SELECT * FROM scanned_sheets WHERE batch_id='$bid' AND status='completed'");
+        while($s=$sh->fetch_assoc()){
+            $sid=$s["id"];$obj=floatval($db->query("SELECT COALESCE(SUM(score),0)o FROM recognition_results WHERE sheet_id='$sid'")->fetch_assoc()["o"]);
+            $subj=floatval($db->query("SELECT COALESCE(SUM(score),0)s FROM subjective_images WHERE sheet_id='$sid' AND graded=1")->fetch_assoc()["s"]);
+            $t=$obj+$subj; $ex=$db->query("SELECT id FROM exam_scores WHERE sheet_id='$sid'");
+            if($ex->num_rows) $db->query("UPDATE exam_scores SET objective_score=$obj,subjective_score=$subj,total_score=$t WHERE sheet_id='$sid'");
+            else{$id=uuid();$sn=$db->real_escape_string($s["student_name"]??"");$db->query("INSERT INTO exam_scores VALUES('$id','$bid','$sid','{$s["student_id"]}','$sn',$obj,$subj,$t,0,'',NOW(),NOW())");}
+            $r[]=["sheet_id"=>$sid,"total"=>$t];
+        } $rr=$db->query("SELECT id FROM exam_scores WHERE batch_id='$bid' ORDER BY total_score DESC");$rk=1;$cn=$rr->num_rows;
+        while($x=$rr->fetch_assoc()){$db->query("UPDATE exam_scores SET `rank`='$rk/$cn' WHERE id='{$x["id"]}'");$rk++;}
+        jsonExit(["message"=>"计算完成","results"=>$r]);
+    }
+    if (preg_match("#^/scores/batch/([^/]+)$#",$uri,$m) && $method==="GET") {
+        authUser($db);$bid=$db->real_escape_string($m[1]);
+        $r=$db->query("SELECT * FROM exam_scores WHERE batch_id='$bid' ORDER BY total_score DESC");$list=[];
+        while($row=$r->fetch_assoc()) $list[]=["id"=>$row["id"],"student_id"=>$row["student_id"],"student_name"=>$row["student_name"],"objective_score"=>floatval($row["objective_score"]),"subjective_score"=>floatval($row["subjective_score"]),"total_score"=>floatval($row["total_score"]),"full_score"=>floatval($row["full_score"]),"rank"=>$row["rank"]];
+        jsonExit($list);
+    }
+    if (preg_match("#^/scores/statistics/([^/]+)$#",$uri,$m) && $method==="GET") {
+        authUser($db);$bid=$db->real_escape_string($m[1]);
+        $r=$db->query("SELECT * FROM exam_scores WHERE batch_id='$bid'");$all=[];while($row=$r->fetch_assoc()) $all[]=$row;
+        if(!count($all)) jsonExit(["message"=>"暂无数据"]);
+        $ts=array_map(fn($s)=>$s["total_score"],$all);$avg=count($ts)?round(array_sum($ts)/count($ts),2):0;
+        $mx=max($ts)?:0;$mn=min($ts)?:0;$full=floatval($all[0]["full_score"]??0);
+        $pass=$full?count(array_filter($ts,fn($s)=>$s>=$full*0.6)):0;
+        jsonExit(["total_students"=>count($ts),"average"=>$avg,"max_score"=>$mx,"min_score"=>$mn,"pass_count"=>$pass,"pass_rate"=>count($ts)?round($pass/count($ts)*100,2):0,"full_score"=>$full]);
+    }
+    if (preg_match("#^/scores/export/([^/]+)$#",$uri,$m) && $method==="GET") {
+        authUser($db);$bid=$db->real_escape_string($m[1]);
+        $r=$db->query("SELECT * FROM exam_scores WHERE batch_id='$bid' ORDER BY total_score DESC");
+        $ln=["排名,考号,姓名,客观题得分,主观题得分,总分,满分"];
+        while($row=$r->fetch_assoc()) $ln[]=implode(",",[$row["rank"]??"",$row["student_id"]??"",$row["student_name"]??"",$row["objective_score"],$row["subjective_score"],$row["total_score"],$row["full_score"]]);
+        jsonExit(["csv"=>implode("\n",$ln),"filename"=>"scores_$bid.csv"]);
+    }
+
+    // ─── TEMPLATES upload/update/delete/export ─
+    if (preg_match("#^/templates/upload-image$#",$uri) && $method==="POST") {
+        authUser($db); if(!isset($_FILES["file"])) jsonExit(["detail"=>"未上传文件"],400);
+        $ext=strtolower(pathinfo($_FILES["file"]["name"],PATHINFO_EXTENSION))?:"png"; $fn=uuid().".$ext";
+        $dir="$UPLOAD_DIR/templates"; @mkdir($dir,0777,true);
+        move_uploaded_file($_FILES["file"]["tmp_name"],"$dir/$fn");
+        jsonExit(["filename"=>$fn,"url"=>"/uploads/templates/$fn"]);
+    }
+    if (preg_match("#^/templates/([^/]+)$#",$uri,$m) && $method==="PUT") {
+        authUser($db); $tid=$db->real_escape_string($m[1]); $input=jsonInput(); $sets=[];
+        foreach(["name","description","subject","grade","exam_name","info_method","status"] as $k)
+            if(isset($input[$k])) $sets[]="$k='".$db->real_escape_string($input[$k])."'";
+        if(isset($input["total_score"])) $sets[]="total_score=".floatval($input["total_score"]);
+        if(count($sets)) $db->query("UPDATE templates SET ".implode(",",$sets)." WHERE id='$tid'");
+        jsonExit(["message"=>"更新成功"]);
+    }
+    if (preg_match("#^/templates/([^/]+)$#",$uri,$m) && $method==="DELETE") {
+        authUser($db); $tid=$db->real_escape_string($m[1]);
+        $db->query("DELETE FROM template_markers WHERE template_id='$tid'");
+        $db->query("DELETE FROM template_zones WHERE template_id='$tid'");
+        $db->query("DELETE FROM objective_questions WHERE template_id='$tid'");
+        $db->query("DELETE FROM correct_answers WHERE template_id='$tid'");
+        $db->query("DELETE FROM templates WHERE id='$tid'"); jsonExit(["message"=>"删除成功"]);
+    }
+    if (preg_match("#^/templates/([^/]+)/export$#",$uri,$m) && $method==="GET") {
+        authUser($db); $tid=$db->real_escape_string($m[1]);
+        $r=$db->query("SELECT * FROM templates WHERE id='$tid'"); $t=$r->fetch_assoc();
+        if(!$t) jsonExit(["detail"=>"模板不存在"],404);
+        jsonExit($t);
+    }
+
+    // ─── SCAN UPLOAD ───────────────────────────
+    if (preg_match("#^/scan/upload$#",$uri) && $method==="POST") {
+        authUser($db); $batchId=$_POST["batch_id"]??""; if(!$batchId||!isset($_FILES["files"])) jsonExit(["detail"=>"缺少参数"],400);
+        $bid=$db->real_escape_string($batchId);
+        if(!$db->query("SELECT id FROM scan_batches WHERE id='$bid'")->num_rows) jsonExit(["detail"=>"批次不存在"],404);
+        $bd="$UPLOAD_DIR/scans/$bid"; @mkdir($bd,0777,true); $c=0;
+        if(is_array($_FILES["files"]["name"])){for($i=0;$i<count($_FILES["files"]["name"]);$i++){
+            $fn=uuid()."_".basename($_FILES["files"]["name"][$i]); move_uploaded_file($_FILES["files"]["tmp_name"][$i],"$bd/$fn");
+            $db->query("INSERT INTO scanned_sheets(id,batch_id,filename,file_path,status,created_at) VALUES('".uuid()."','$bid','$fn','$fn','pending',NOW())");$c++;
+        }}else{$fn=uuid()."_".basename($_FILES["files"]["name"]); move_uploaded_file($_FILES["files"]["tmp_name"],"$bd/$fn");
+            $db->query("INSERT INTO scanned_sheets VALUES('".uuid()."','$bid','$fn','$fn','',NULL,'pending','',1,'front',NULL,NOW())");$c++;
+        } $db->query("UPDATE scan_batches SET total_sheets=total_sheets+$c WHERE id='$bid'");
+        jsonExit(["message"=>"上传成功 共{$c}张","count"=>$c]);
+    }
+
+    // ─── SCAN RECOGNIZE → Python ──────────────
+    if (preg_match("#^/scan/recognize/([^/]+)$#",$uri,$m) && $method==="POST") {
+        authUser($db); $bid=$db->real_escape_string($m[1]);
+        header("Location: https://onlinemark-backend.onrender.com/api/scan/recognize/$bid",true,307); exit;
+    }
+
+    // ─── GRADING pending/grade ─────────────────
+    if (preg_match("#^/grading/pending$#",$uri) && $method==="GET") {
+        $u=authUser($db);$uid=$db->real_escape_string($u["id"]);
+        $r=$db->query("SELECT a.id aid,a.task_id,a.question_number,a.total_count,a.graded_count,t.name tn FROM grading_assignments a JOIN grading_tasks t ON a.task_id=t.id WHERE a.teacher_id='$uid' AND a.status!='completed'");$list=[];
+        while($row=$r->fetch_assoc()){$qn=intval($row["question_number"]);
+            $s=$db->query("SELECT id,file_path,sheet_id,COALESCE(max_score,0)ms FROM subjective_images WHERE question_number=$qn AND graded=0 LIMIT 10");$imgs=[];
+            while($im=$s->fetch_assoc()) $imgs[]=["id"=>$im["id"],"file_path"=>$im["file_path"],"sheet_id"=>$im["sheet_id"],"max_score"=>floatval($im["ms"])];
+            $list[]=["assignment_id"=>$row["aid"],"task_name"=>$row["tn"],"question_number"=>$qn,"total_count"=>intval($row["total_count"]),"graded_count"=>intval($row["graded_count"]),"pending_images"=>$imgs];
+        } jsonExit($list);
+    }
+    if (preg_match("#^/grading/grade$#",$uri) && $method==="POST") {
+        $u=authUser($db);$input=jsonInput();$uid=$db->real_escape_string($u["id"]);
+        $aid=$db->real_escape_string($input["assignment_id"]??"");
+        if(!$db->query("SELECT id FROM grading_assignments WHERE id='$aid' AND teacher_id='$uid'")->num_rows) jsonExit(["detail"=>"无权限"],403);
+        $qn=intval($input["question_number"]??0);$sc=floatval($input["score"]??0);
+        $sid=$db->real_escape_string($input["sheet_id"]??"");$sii=$db->real_escape_string($input["subjective_image_id"]??"");
+        $gid=uuid();$db->query("INSERT INTO grades VALUES('$gid','$aid','$sid','$sii',$qn,$sc,'$uid',1,NULL,NOW())");
+        if($sii) $db->query("UPDATE subjective_images SET score=$sc,graded=1 WHERE id='$sii'");
+        $db->query("UPDATE grading_assignments SET graded_count=graded_count+1 WHERE id='$aid'");
+        $a=$db->query("SELECT graded_count,total_count FROM grading_assignments WHERE id='$aid'")->fetch_assoc();
+        if(intval($a["graded_count"])>=intval($a["total_count"])) $db->query("UPDATE grading_assignments SET status='completed' WHERE id='$aid'");
+        jsonExit(["message"=>"评分提交成功"]);
+    }
+
     // ─── Health ────────────────────────────────────────
     if (preg_match("#^/?$#", $uri) || $uri === "/health") {
         jsonExit(["name"=>"OnlineMark PHP Bridge","status"=>"running"]);

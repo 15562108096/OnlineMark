@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -17,7 +17,9 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="账号已被禁用")
-    if user.role.value != req.role:
+    if user.role.value == "super_admin" and req.role == "admin":
+        pass
+    elif user.role.value != req.role:
         raise HTTPException(status_code=401, detail=f"身份不匹配，该账号不是{req.role}身份")
     token = create_access_token({"sub": user.id, "role": user.role.value})
     return TokenResponse(access_token=token, user=user.to_dict())

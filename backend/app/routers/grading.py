@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -102,8 +102,9 @@ def assign_grading(req: GradingAssignRequest, db: Session = Depends(get_db),
 @router.get("/pending")
 def get_pending_grading(current_user: User = Depends(get_current_user),
                         db: Session = Depends(get_db)):
-    if current_user.role != UserRole.TEACHER:
-        raise HTTPException(status_code=403, detail="仅教师可查看待评阅列表")
+    # Teachers and admins can grade
+    if current_user.role not in [UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN]:
+        raise HTTPException(status_code=403, detail="仅教师和管理员可查看待评阅列表")
     assignments = db.query(GradingAssignment).filter(
         GradingAssignment.teacher_id == current_user.id,
         GradingAssignment.status != "completed"
@@ -132,7 +133,7 @@ def get_pending_grading(current_user: User = Depends(get_current_user),
 
 @router.post("/grade")
 def submit_grade(req: GradeSubmit, db: Session = Depends(get_db),
-                 current_user: User = Depends(require_role(UserRole.TEACHER))):
+                 current_user: User = Depends(require_role(UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPER_ADMIN))):
     assignment = db.query(GradingAssignment).filter(
         GradingAssignment.id == req.assignment_id,
         GradingAssignment.teacher_id == current_user.id

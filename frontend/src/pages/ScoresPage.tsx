@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, Table, Button, Space, Tag, Modal, Select, message, Statistic, Row, Col, Empty, Descriptions } from "antd";
 import { BarChartOutlined, DownloadOutlined, CalculatorOutlined, EyeOutlined } from "@ant-design/icons";
 import { scoreApi, scanApi } from "../services/api";

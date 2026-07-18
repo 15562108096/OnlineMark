@@ -1,11 +1,10 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button, Input, message, Form } from "antd";
 import { UserOutlined, LockOutlined } from "@ant-design/icons";
 import { useAuth } from "../store/AuthContext";
 
 const roles = [
-  { key: "super_admin", label: "超级管理员" },
   { key: "admin", label: "管理员" },
   { key: "teacher", label: "教师" },
   { key: "student", label: "学生" },

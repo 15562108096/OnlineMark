@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, DateTime, Float, ForeignKey
 from sqlalchemy.dialects.mysql import CHAR

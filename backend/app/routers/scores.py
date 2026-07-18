@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session

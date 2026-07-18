@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Card, Table, Button, Space, Tag, Modal, Upload, message, Select, Input, Progress, Statistic, Row, Col } from "antd";
 import { PlusOutlined, UploadOutlined, PlayCircleOutlined, EyeOutlined, InboxOutlined } from "@ant-design/icons";
 import { scanApi, templateApi } from "../services/api";
@@ -128,6 +128,14 @@ const ScanBatchPage: React.FC = () => {
             {templates.map((t) => <Select.Option key={t.id} value={t.id}>{t.name}</Select.Option>)}
           </Select>
           <Input placeholder="考试名称（可选）" value={newBatch.exam_name} onChange={(e) => setNewBatch({ ...newBatch, exam_name: e.target.value })} />
+          <Select placeholder="上传顺序" value={newBatch.upload_order || "sequential"} onChange={(v) => setNewBatch({ ...newBatch, upload_order: v })} style={{ width: "100%" }}>
+            <Select.Option value="sequential">顺序上传（第1页→第2页）</Select.Option>
+            <Select.Option value="reversed">倒序上传（第2页→第1页）</Select.Option>
+          </Select>
+          <Select placeholder="上传顺序" value={newBatch.upload_order || "sequential"} onChange={(v) => setNewBatch({ ...newBatch, upload_order: v })} style={{ width: "100%" }}>
+            <Select.Option value="sequential">顺序上传（第1页→第2页）</Select.Option>
+            <Select.Option value="reversed">倒序上传（第2页→第1页）</Select.Option>
+          </Select>
         </Space>
       </Modal>
 
