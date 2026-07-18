@@ -11,8 +11,6 @@ from app.database import init_db, engine, Base, run_migrations
 Base.metadata.create_all(bind=engine)
 run_migrations(engine)
 
-from app.routers import auth, users, templates, scan, grading, scores
-
 app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION)
 
 app.add_middleware(
@@ -26,17 +24,34 @@ app.add_middleware(
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(templates.router)
-app.include_router(scan.router)
-app.include_router(grading.router)
-app.include_router(scores.router)
+# ─── Route Registration ─────────────────────────────────
+# Strategy:
+#   PHP_API_ENABLED=True  → DB routes go through PHP proxy on InfinityFree
+#   PHP_API_ENABLED=False → DB routes use direct SQLAlchemy (local dev)
 
+if settings.PHP_API_ENABLED:
+    # Production: DB via PHP bridge on InfinityFree
+    from app.routers.php_proxy import router as php_router
+    app.include_router(php_router)
+    # Python-only routes (upload, recognition, grading)
+    from app.routers.scan import router as scan_router
+    app.include_router(scan_router)
+    from app.routers.grading import router as grading_router
+    app.include_router(grading_router)
+else:
+    # Local dev: direct SQLAlchemy
+    from app.routers import auth, users, templates, scan, grading, scores
+    app.include_router(auth.router)
+    app.include_router(users.router)
+    app.include_router(templates.router)
+    app.include_router(scan.router)
+    app.include_router(grading.router)
+    app.include_router(scores.router)
+
+# ─── Frontend static files (SPA) ────────────────────────
 FRONTEND_DIST = os.environ.get("FRONTEND_DIST", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", "dist"))
 if os.path.isdir(FRONTEND_DIST):
     app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="frontend_assets")
-
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str):
         if full_path.startswith(("api/", "uploads/", "health")):

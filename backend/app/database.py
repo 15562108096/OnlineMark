@@ -1,25 +1,34 @@
-# 数据库连接配置 - 默认使用SQLite本地开发，设置DB_TYPE=mysql使用远程MySQL
+﻿# -*- coding: utf-8 -*-
+"""数据库连接配置"""
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from app.config import settings
+import os
+
 DB_TYPE = settings.DB_TYPE.lower()
 
-if DB_TYPE == "mysql":
-    engine = create_engine(settings.DATABASE_URL, pool_size=10, max_overflow=20, pool_pre_ping=True)
+if settings.PHP_API_ENABLED:
+    # PHP桥接模式：使用SQLite内存引擎作为SQLAlchemy的占位
+    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
 else:
-    engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
+    # 直连模式
+    if DB_TYPE == "mysql":
+        engine = create_engine(settings.DATABASE_URL, pool_size=10, max_overflow=20, pool_pre_ping=True)
+    else:
+        engine = create_engine(settings.DATABASE_URL, connect_args={"check_same_thread": False})
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
-
 
 import sqlalchemy as sa
 from sqlalchemy import text
 
 def run_migrations(engine):
     """Add new columns to existing tables"""
+    if settings.PHP_API_ENABLED:
+        # 桥接模式下跳过SQLite内存表的迁移
+        return
     migs = [
         ("templates", "total_pages", "ALTER TABLE templates ADD COLUMN total_pages INTEGER DEFAULT 1"),
         ("templates", "pdf_path", "ALTER TABLE templates ADD COLUMN pdf_path VARCHAR(500)"),
@@ -38,7 +47,8 @@ def run_migrations(engine):
                 conn.execute(text(sql))
                 conn.commit()
         except Exception:
-            pass  # Column likely already exists
+            pass
+
 def get_db():
     db = SessionLocal()
     try:
@@ -47,4 +57,5 @@ def get_db():
         db.close()
 
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    if not settings.PHP_API_ENABLED:
+        Base.metadata.create_all(bind=engine)
