@@ -26,7 +26,9 @@ function uuid(): string { return sprintf("%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
 
 $method = $_SERVER["REQUEST_METHOD"];
 $uri = rtrim(parse_url($_SERVER["REQUEST_URI"], PHP_URL_PATH), "/");
-if (preg_match("#^/api/(.+)#", $uri, $m)) $uri = "/".$m[1];
+// Strip subdirectory prefix if present
+if (preg_match("#^/services/OnlineMark/api/(.+)#", $uri, $m)) $uri = "/".$m[1];
+elseif (preg_match("#^/api/(.+)#", $uri, $m)) $uri = "/".$m[1];
 $uri = rtrim($uri, "/") ?: "/";
 
 try {

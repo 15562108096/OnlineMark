@@ -1,5 +1,5 @@
 ﻿RewriteEngine On
-RewriteBase /
+RewriteBase /services/OnlineMark/
 
 # Static files: serve directly
 RewriteCond %{REQUEST_FILENAME} -f [OR]
