@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Text, DateTime, Enum, Boolean, Integer, Float, JSON, ForeignKey
 from sqlalchemy.dialects.mysql import CHAR
@@ -33,7 +33,9 @@ class Template(Base):
     subject = Column(String(100), nullable=True)
     grade = Column(String(50), nullable=True)
     exam_name = Column(String(200), nullable=True)
-    image_path = Column(String(500), nullable=False)
+    image_path = Column(String(500), nullable=True, default="")
+    pdf_path = Column(String(500), nullable=True)
+    total_pages = Column(Integer, default=1)
     image_width = Column(Integer, nullable=True)
     image_height = Column(Integer, nullable=True)
     total_score = Column(Float, default=0.0)
@@ -81,11 +83,15 @@ class TemplateMarker(Base):
     x = Column(Float, nullable=False)
     y = Column(Float, nullable=False)
     label = Column(String(50), nullable=True)
+    page_number = Column(Integer, default=0)
+    width = Column(Float, default=0.0)
+    height = Column(Float, default=0.0)
+    shape = Column(String(20), default="circle")
 
     template = relationship("Template", back_populates="markers")
 
     def to_dict(self):
-        return {"id": self.id, "point_index": self.point_index, "x": self.x, "y": self.y, "label": self.label}
+        return {"id": self.id, "point_index": self.point_index, "x": self.x, "y": self.y, "width": self.width, "height": self.height, "shape": self.shape, "label": self.label, "page_number": self.page_number}
 
 class TemplateZone(Base):
     __tablename__ = "template_zones"
@@ -99,6 +105,9 @@ class TemplateZone(Base):
     width = Column(Float, nullable=False)
     height = Column(Float, nullable=False)
     sort_order = Column(Integer, default=0)
+    answer_positions = Column(JSON, nullable=True)
+    page_number = Column(Integer, default=0)
+    config = Column(JSON, nullable=True)
 
     template = relationship("Template", back_populates="zones")
 
@@ -106,7 +115,7 @@ class TemplateZone(Base):
         return {
             "id": self.id, "zone_type": self.zone_type.value if self.zone_type else None,
             "label": self.label, "x": self.x, "y": self.y,
-            "width": self.width, "height": self.height, "sort_order": self.sort_order
+            "width": self.width, "height": self.height, "sort_order": self.sort_order, "page_number": self.page_number, "config": self.config
         }
 
 class ObjectiveQuestion(Base):
@@ -126,6 +135,7 @@ class ObjectiveQuestion(Base):
     width = Column(Float, nullable=True)
     height = Column(Float, nullable=True)
     correct_answer = Column(String(50), nullable=True)
+    answer_positions = Column(JSON, nullable=True)
     sort_order = Column(Integer, default=0)
 
     template = relationship("Template", back_populates="questions")
@@ -139,7 +149,7 @@ class ObjectiveQuestion(Base):
             "option_layout": self.option_layout.value if self.option_layout else None,
             "score": self.score, "x": self.x, "y": self.y,
             "width": self.width, "height": self.height,
-            "correct_answer": self.correct_answer, "sort_order": self.sort_order
+            "correct_answer": self.correct_answer, "answer_positions": getattr(self, 'answer_positions', None), "sort_order": self.sort_order
         }
 
 class CorrectAnswer(Base):

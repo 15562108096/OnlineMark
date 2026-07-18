@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, Text, DateTime, Enum, Boolean, Integer, Float, JSON, ForeignKey
 from sqlalchemy.dialects.mysql import CHAR
@@ -20,6 +20,7 @@ class ScanBatch(Base):
     template_id = Column(CHAR(36), ForeignKey("templates.id"), nullable=False)
     exam_name = Column(String(200), nullable=True)
     total_sheets = Column(Integer, default=0)
+    upload_order = Column(String(20), default="sequential")
     processed_sheets = Column(Integer, default=0)
     status = Column(String(20), default="pending")
     created_by = Column(CHAR(36), nullable=True)
@@ -39,6 +40,8 @@ class ScannedSheet(Base):
     student_name = Column(String(100), nullable=True)
     status = Column(Enum(RecognitionStatus), default=RecognitionStatus.PENDING)
     error_message = Column(Text, nullable=True)
+    page_number = Column(Integer, default=1)
+    side = Column(String(20), default="front")
     processed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
