@@ -4,7 +4,7 @@
  * Visit this URL in your browser ONCE after uploading to InfinityFree.
  * It creates the admin user in the database.
  */
-$DB_HOST = getenv("DB_HOST") ?: "sql306.infinityfree.com";
+$DB_HOST = getenv("DB_HOST") ?: "localhost";
 $DB_USER = getenv("DB_USER") ?: "if0_39743066";
 $DB_PASS = getenv("DB_PASSWORD") ?: "DouglasJP2026";
 $DB_NAME = getenv("DB_NAME") ?: "if0_39743066_onlinemark";
