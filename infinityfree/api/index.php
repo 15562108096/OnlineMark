@@ -158,6 +158,52 @@ try {
         jsonExit(["id"=>$t["id"],"name"=>$t["name"],"description"=>$t["description"],"subject"=>$t["subject"],"grade"=>$t["grade"],"exam_name"=>$t["exam_name"],"image_path"=>$t["image_path"]??"","image_width"=>$t["image_width"]?intval($t["image_width"]):null,"image_height"=>$t["image_height"]?intval($t["image_height"]):null,"total_score"=>floatval($t["total_score"]??0),"objective_score"=>floatval($t["objective_score"]??0),"subjective_score"=>floatval($t["subjective_score"]??0),"info_method"=>$t["info_method"]??"omr","status"=>$t["status"]??"draft","created_at"=>$t["created_at"],"markers"=>$markers,"zones"=>$zones,"questions"=>$questions]);
     }
 
+    // ─── Grading: tasks ──────────────────────────────
+    if (preg_match("#^/grading/task/?$#", $uri) && $method === "GET") {
+        $r = $db->query("SELECT * FROM grading_tasks ORDER BY created_at DESC");
+        $list = [];
+        while ($row = $r->fetch_assoc()) {
+            $tid = $row["id"];
+            $a = $db->query("SELECT id, teacher_id, question_number, total_count, graded_count, status FROM grading_assignments WHERE task_id = '$tid'");
+            $assignments = [];
+            while ($as = $a->fetch_assoc()) $assignments[] = $as;
+            $list[] = [
+                "id" => $row["id"], "name" => $row["name"],
+                "batch_id" => $row["batch_id"], "template_id" => $row["template_id"],
+                "status" => $row["status"], "total_subjective" => intval($row["total_subjective"]),
+                "graded_count" => intval($row["graded_count"]),
+                "threshold" => floatval($row["threshold"]),
+                "created_at" => $row["created_at"],
+                "assignments" => $assignments
+            ];
+        }
+        jsonExit($list);
+    }
+    if (preg_match("#^/grading/task/?$#", $uri) && $method === "POST") {
+        $input = jsonInput();
+        $id = uuid();
+        $n = $db->real_escape_string($input["name"]??"");
+        $bid = $db->real_escape_string($input["batch_id"]??"");
+        $tid = $db->real_escape_string($input["template_id"]??"");
+        $th = floatval($input["threshold"]??5);
+        $db->query("INSERT INTO grading_tasks (id, name, batch_id, template_id, status, total_subjective, graded_count, threshold, created_at) VALUES ('$id', '$n', '$bid', '$tid', 'pending', 0, 0, $th, NOW())");
+        jsonExit(["message" => "阅卷任务创建成功", "task" => ["id" => $id, "name" => $n]]);
+    }
+    if (preg_match("#^/grading/assign/?$#", $uri) && $method === "POST") {
+        $input = jsonInput();
+        $tpid = $db->real_escape_string($input["task_id"]??"");
+        $tchid = $db->real_escape_string($input["teacher_id"]??"");
+        $qnums = $input["question_numbers"] ?? [];
+        $inserted = 0;
+        foreach ($qnums as $qn) {
+            $aid = uuid();
+            $qn2 = intval($qn);
+            $db->query("INSERT INTO grading_assignments (id, task_id, teacher_id, question_number, question_type, total_count, graded_count, status, created_at) VALUES ('$aid', '$tpid', '$tchid', $qn2, 'subjective', 0, 0, 'pending', NOW())");
+            $inserted++;
+        }
+        jsonExit(["message" => "分配成功", "count" => $inserted]);
+    }
+
     // ─── Health ────────────────────────────────────────
     if (preg_match("#^/?$#", $uri) || $uri === "/health") {
         jsonExit(["name"=>"OnlineMark PHP Bridge","status"=>"running"]);
