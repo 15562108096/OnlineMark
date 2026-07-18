@@ -14,6 +14,10 @@ $DB_USER = getenv("DB_USER") ?: "if0_39743066";
 $DB_PASS = getenv("DB_PASSWORD") ?: "DouglasJP2026";
 $DB_NAME = getenv("DB_NAME") ?: "if0_39743066_onlinemark";
 
+function authHeader(): string {
+    return $_SERVER["HTTP_AUTHORIZATION"] ?? $_SERVER["REDIRECT_HTTP_AUTHORIZATION"] ?? "";
+}
+
 function getDB(): mysqli {
     global $DB_HOST, $DB_USER, $DB_PASS, $DB_NAME;
     $conn = new mysqli($DB_HOST, $DB_USER, $DB_PASS, $DB_NAME);
@@ -76,7 +80,7 @@ try {
 
     // ─── Auth: me ─────────────────────────────────────
     if (preg_match("#^/auth/me$#", $uri) && $method === "GET") {
-        $auth = $_SERVER["HTTP_AUTHORIZATION"] ?? "";
+        $auth = authHeader();
         if (!preg_match("/^Bearer\s+(.+)$/i", $auth, $m)) jsonExit(["detail"=>"未登录"], 401);
         $parts = explode(".", $m[1]);
         if (count($parts) !== 3) jsonExit(["detail"=>"令牌无效"], 401);

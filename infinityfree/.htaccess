@@ -1,4 +1,7 @@
-﻿RewriteEngine On
+﻿# Pass Authorization header to PHP (required for JWT auth on some Apache configs)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+RewriteEngine On
 RewriteBase /services/OnlineMark/
 
 # Static files: serve directly
@@ -6,22 +9,11 @@ RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# DB API routes → PHP on InfinityFree
-RewriteRule ^api/auth/ api/index.php [QSA,L]
-RewriteRule ^api/users api/index.php [QSA,L]
-RewriteRule ^api/templates api/index.php [QSA,L]
-RewriteRule ^api/scan/batch api/index.php [QSA,L]
-RewriteRule ^api/scan/upload api/index.php [QSA,L]
-RewriteRule ^api/scores api/index.php [QSA,L]
-RewriteRule ^api/grading api/index.php [QSA,L]
-RewriteRule ^api/seed$ api/index.php [QSA,L]
-
-# Scan upload → PHP handles file upload
-# Scan recognize → Python OMR (307 preserves POST body)
-RewriteRule ^api/scan/recognize/ https://onlinemark-backend.onrender.com/api/scan/recognize/ [R=307,L]
-
-# Catch-all: any unmatched /api/* → PHP
+# API routes → PHP (catch-all)
 RewriteRule ^api/ api/index.php [QSA,L]
+
+# Scan recognize → Python OMR on Render
+RewriteRule ^api/scan/recognize/ https://onlinemark-backend.onrender.com/api/scan/recognize/ [R=307,L]
 
 # SPA fallback
 RewriteRule ^ index.html [L]
