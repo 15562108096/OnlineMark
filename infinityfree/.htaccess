@@ -11,12 +11,13 @@ RewriteRule ^api/auth/ api/index.php [QSA,L]
 RewriteRule ^api/users api/index.php [QSA,L]
 RewriteRule ^api/templates api/index.php [QSA,L]
 RewriteRule ^api/scan/batch api/index.php [QSA,L]
+RewriteRule ^api/scan/upload api/index.php [QSA,L]
 RewriteRule ^api/scores api/index.php [QSA,L]
 RewriteRule ^api/grading api/index.php [QSA,L]
 RewriteRule ^api/seed$ api/index.php [QSA,L]
 
-# Scan upload/recognize → Render (307 preserves POST body)
-RewriteRule ^api/scan/upload https://onlinemark-backend.onrender.com/api/scan/upload [R=307,L]
+# Scan upload → PHP handles file upload
+# Scan recognize → Python OMR (307 preserves POST body)
 RewriteRule ^api/scan/recognize/ https://onlinemark-backend.onrender.com/api/scan/recognize/ [R=307,L]
 
 # SPA fallback
