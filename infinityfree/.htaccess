@@ -20,5 +20,8 @@ RewriteRule ^api/seed$ api/index.php [QSA,L]
 # Scan recognize → Python OMR (307 preserves POST body)
 RewriteRule ^api/scan/recognize/ https://onlinemark-backend.onrender.com/api/scan/recognize/ [R=307,L]
 
+# Catch-all: any unmatched /api/* → PHP
+RewriteRule ^api/ api/index.php [QSA,L]
+
 # SPA fallback
 RewriteRule ^ index.html [L]
