@@ -1,0 +1,24 @@
+﻿# ====================================
+# OnlineMark — 根目录 .htaccess 转发规则
+# 把这个文件的内容追加到 htdocs/.htaccess 中
+# ====================================
+RewriteEngine On
+RewriteBase /
+
+# 已有内容保留，只追加以下规则
+
+# 转发 API 请求到子目录
+RewriteRule ^api/(.*)$ services/OnlineMark/api/$1 [QSA,L]
+
+# 转发上传文件访问
+RewriteRule ^uploads/(.*)$ services/OnlineMark/uploads/$1 [QSA,L]
+
+# 转发 seed 脚本
+RewriteRule ^seed\.php$ services/OnlineMark/seed.php [QSA,L]
+
+# 转发 phpinfo 诊断
+RewriteRule ^phpinfo\.php$ services/OnlineMark/phpinfo.php [QSA,L]
+
+# 在线马克的静态文件
+RewriteRule ^(assets/.*)$ services/OnlineMark/$1 [QSA,L]
+RewriteRule ^(vite\.svg)$ services/OnlineMark/$1 [QSA,L]
